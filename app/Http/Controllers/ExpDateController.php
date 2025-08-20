@@ -82,6 +82,7 @@ class ExpDateController extends Controller
     {
         //
     }
+
     public function updateByCursoId(Request $request, $curso_id)
     {
         $validatedData = $request->validate([
@@ -90,7 +91,7 @@ class ExpDateController extends Controller
 
         $expDate = ExpDate::where('curso_id', $curso_id)->first();
 
-        if (!$expDate) {
+        if (! $expDate) {
             return response()->json(['message' => 'ExpDate not found'], 404);
         }
 
