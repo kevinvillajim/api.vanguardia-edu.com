@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Course;
 
+use App\Helpers\StorageHelper;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class CourseResource extends JsonResource
@@ -13,7 +14,7 @@ class CourseResource extends JsonResource
             'title' => $this->title,
             'slug' => $this->slug,
             'description' => $this->description,
-            'banner_image' => $this->banner_image ? asset('storage/'.$this->banner_image) : null,
+            'banner_image' => $this->banner_image ? StorageHelper::courseBannerUrl($this->banner_image) : null,
             'difficulty_level' => $this->difficulty_level,
             'duration_hours' => $this->duration_hours,
             'price' => $this->price,

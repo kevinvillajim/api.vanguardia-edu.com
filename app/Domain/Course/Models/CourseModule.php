@@ -13,6 +13,7 @@ class CourseModule extends Model
 
     protected $fillable = [
         'course_id',
+        'unit_id',
         'title',
         'description',
         'order_index',
@@ -27,6 +28,11 @@ class CourseModule extends Model
     public function course(): BelongsTo
     {
         return $this->belongsTo(Course::class);
+    }
+
+    public function unit(): BelongsTo
+    {
+        return $this->belongsTo(CourseUnit::class, 'unit_id');
     }
 
     public function lessons(): HasMany

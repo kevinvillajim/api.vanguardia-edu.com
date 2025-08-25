@@ -1,11 +1,12 @@
 <?php
 
-namespace App\Http\Controllers\Api\V2;
+namespace App\Http\Controllers;
 
 use App\Domain\Course\Models\Certificate;
 use App\Domain\Course\Models\Course;
 use App\Domain\Course\Models\CourseEnrollment;
 use App\Domain\Course\Services\CourseCloneService;
+use App\Domain\Admin\Services\AdminService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,10 +17,12 @@ use Illuminate\Validation\Rule;
 class AdminController extends Controller
 {
     protected CourseCloneService $cloneService;
+    protected AdminService $adminService;
 
-    public function __construct(CourseCloneService $cloneService)
+    public function __construct(CourseCloneService $cloneService, AdminService $adminService)
     {
         $this->cloneService = $cloneService;
+        $this->adminService = $adminService;
     }
 
     /**
@@ -115,87 +118,20 @@ class AdminController extends Controller
      */
     public function getDashboard(): JsonResponse
     {
-        $stats = [
-            'courses' => [
-                'total' => Course::count(),
-                'published' => Course::where('is_published', true)->count(),
-                'draft' => Course::where('is_published', false)->count(),
-                'this_month' => Course::where('created_at', '>=', now()->startOfMonth())->count(),
-            ],
-            'enrollments' => [
-                'total' => CourseEnrollment::count(),
-                'active' => CourseEnrollment::where('status', 'active')->count(),
-                'completed' => CourseEnrollment::where('status', 'completed')->count(),
-                'this_month' => CourseEnrollment::where('enrolled_at', '>=', now()->startOfMonth())->count(),
-            ],
-            'certificates' => [
-                'total' => Certificate::where('is_valid', true)->count(),
-                'virtual' => Certificate::where('type', 'virtual')->where('is_valid', true)->count(),
-                'complete' => Certificate::where('type', 'complete')->where('is_valid', true)->count(),
-                'this_month' => Certificate::where('issued_at', '>=', now()->startOfMonth())->count(),
-            ],
-            'users' => [
-                'total' => DB::table('users')->count(),
-                'students' => DB::table('users')->where('role', 'student')->count(),
-                'teachers' => DB::table('users')->where('role', 'teacher')->count(),
-                'admins' => DB::table('users')->where('role', 'admin')->count(),
-            ],
-        ];
-
-        // Estadísticas de actividad reciente
-        $recentActivity = [
-            'new_enrollments' => CourseEnrollment::with(['student', 'course'])
-                ->where('enrolled_at', '>=', now()->subDays(7))
-                ->orderBy('enrolled_at', 'desc')
-                ->limit(10)
-                ->get()
-                ->map(function ($enrollment) {
-                    return [
-                        'student_name' => $enrollment->student->name,
-                        'course_title' => $enrollment->course->title,
-                        'enrolled_at' => $enrollment->enrolled_at,
-                    ];
-                }),
-            'new_certificates' => Certificate::with(['student', 'course'])
-                ->where('issued_at', '>=', now()->subDays(7))
-                ->orderBy('issued_at', 'desc')
-                ->limit(10)
-                ->get()
-                ->map(function ($certificate) {
-                    return [
-                        'student_name' => $certificate->student->name,
-                        'course_title' => $certificate->course->title,
-                        'type' => $certificate->type,
-                        'issued_at' => $certificate->issued_at,
-                    ];
-                }),
-        ];
-
-        // Cursos más populares
-        $popularCourses = Course::select('courses.*', DB::raw('COUNT(course_enrollments.id) as enrollments_count'))
-            ->leftJoin('course_enrollments', 'courses.id', '=', 'course_enrollments.course_id')
-            ->where('courses.is_published', true)
-            ->groupBy('courses.id')
-            ->orderBy('enrollments_count', 'desc')
-            ->limit(10)
-            ->get()
-            ->map(function ($course) {
-                return [
-                    'id' => $course->id,
-                    'title' => $course->title,
-                    'enrollments_count' => $course->enrollments_count,
-                    'teacher_name' => $course->teacher->name ?? 'N/A',
-                ];
-            });
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'stats' => $stats,
-                'recent_activity' => $recentActivity,
-                'popular_courses' => $popularCourses,
-            ],
-        ]);
+        try {
+            $dashboardData = $this->adminService->getDashboardStats();
+            
+            return response()->json([
+                'success' => true,
+                'data' => $dashboardData,
+                'message' => 'Dashboard data retrieved successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
     }
 
     /**
@@ -360,5 +296,299 @@ class AdminController extends Controller
         }
 
         return $this->parseSettingValue($setting->value, $setting->type);
+    }
+
+    // ========================================
+    // USER MANAGEMENT METHODS
+    // ========================================
+
+    /**
+     * Obtiene lista de usuarios con paginación
+     */
+    public function getUsers(Request $request): JsonResponse
+    {
+        try {
+            $query = \App\Models\User::query();
+
+            // Filtros opcionales
+            if ($request->has('role')) {
+                $query->where('role', $request->role);
+            }
+
+            if ($request->has('search')) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('email', 'like', "%{$search}%");
+                });
+            }
+
+            if ($request->has('active')) {
+                $query->where('active', $request->active);
+            }
+
+            $users = $query->orderBy($request->get('sort', 'created_at'), $request->get('order', 'desc'))
+                ->paginate($request->get('per_page', 10));
+
+            return response()->json([
+                'success' => true,
+                'data' => $users->items(),
+                'pagination' => [
+                    'current_page' => $users->currentPage(),
+                    'last_page' => $users->lastPage(),
+                    'per_page' => $users->perPage(),
+                    'total' => $users->total(),
+                ],
+                'message' => 'Usuarios obtenidos exitosamente'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtiene un usuario específico
+     */
+    public function getUser(int $userId): JsonResponse
+    {
+        try {
+            $user = \App\Models\User::findOrFail($userId);
+
+            return response()->json([
+                'success' => true,
+                'data' => $user,
+                'message' => 'Usuario obtenido exitosamente'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Usuario no encontrado',
+            ], 404);
+        }
+    }
+
+    /**
+     * Crea un nuevo usuario
+     */
+    public function createUser(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'name' => 'required|string|max:255',
+                'email' => 'required|email|unique:users,email',
+                'password' => 'required|string|min:8',
+                'role' => 'required|integer|in:1,2,3',
+                'active' => 'boolean',
+            ]);
+
+            $user = \App\Models\User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'password' => bcrypt($request->password),
+                'role' => $request->role,
+                'active' => $request->get('active', true),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $user,
+                'message' => 'Usuario creado exitosamente'
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
+     * Actualiza un usuario
+     */
+    public function updateUser(Request $request, int $userId): JsonResponse
+    {
+        try {
+            $user = \App\Models\User::findOrFail($userId);
+
+            $request->validate([
+                'name' => 'sometimes|string|max:255',
+                'email' => 'sometimes|email|unique:users,email,' . $userId,
+                'password' => 'sometimes|string|min:8',
+                'role' => 'sometimes|integer|in:1,2,3',
+                'active' => 'sometimes|boolean',
+            ]);
+
+            $updateData = $request->only(['name', 'email', 'role', 'active']);
+
+            if ($request->has('password')) {
+                $updateData['password'] = bcrypt($request->password);
+            }
+
+            $user->update($updateData);
+
+            return response()->json([
+                'success' => true,
+                'data' => $user->fresh(),
+                'message' => 'Usuario actualizado exitosamente'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
+     * Elimina un usuario
+     */
+    public function deleteUser(int $userId): JsonResponse
+    {
+        try {
+            $user = \App\Models\User::findOrFail($userId);
+
+            // No permitir eliminar al usuario actual
+            if ($user->id === auth()->id()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No puedes eliminar tu propia cuenta',
+                ], 400);
+            }
+
+            $user->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Usuario eliminado exitosamente'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
+     * Resetea la contraseña de un usuario
+     */
+    public function resetUserPassword(Request $request, int $userId): JsonResponse
+    {
+        try {
+            $request->validate([
+                'password' => 'required|string|min:8',
+            ]);
+
+            $user = \App\Models\User::findOrFail($userId);
+
+            $user->update([
+                'password' => bcrypt($request->password),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Contraseña restablecida exitosamente'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    /**
+     * Importa usuarios desde un archivo CSV
+     */
+    public function importUsers(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'file' => 'required|file|mimes:csv,txt',
+            ]);
+
+            // Por ahora, retornar un mensaje indicando que la funcionalidad está pendiente
+            return response()->json([
+                'success' => false,
+                'message' => 'Funcionalidad de importación en desarrollo',
+            ], 501);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    // ========================================
+    // REPORTS AND ANALYTICS METHODS
+    // ========================================
+
+    /**
+     * Get detailed user report
+     */
+    public function getUserReport(Request $request): JsonResponse
+    {
+        try {
+            $filters = $request->only(['role', 'date_from', 'date_to']);
+            $report = $this->adminService->getDetailedUserReport($filters);
+
+            return response()->json([
+                'success' => true,
+                'data' => $report,
+                'message' => 'User report generated successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+    /**
+     * Get detailed course report
+     */
+    public function getCourseReport(Request $request): JsonResponse
+    {
+        try {
+            $filters = $request->only(['teacher_id', 'is_published']);
+            $report = $this->adminService->getDetailedCourseReport($filters);
+
+            return response()->json([
+                'success' => true,
+                'data' => $report,
+                'message' => 'Course report generated successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+    /**
+     * Get system health status
+     */
+    public function getSystemHealth(): JsonResponse
+    {
+        try {
+            $health = $this->adminService->getSystemHealth();
+
+            return response()->json([
+                'success' => true,
+                'data' => $health,
+                'message' => 'System health retrieved successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
     }
 }

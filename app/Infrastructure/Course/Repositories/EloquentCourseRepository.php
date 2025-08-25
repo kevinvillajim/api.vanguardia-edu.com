@@ -68,6 +68,13 @@ class EloquentCourseRepository implements CourseRepositoryInterface
         return $query->paginate($perPage);
     }
 
+    public function getAll(): Collection
+    {
+        return Course::with(['teacher', 'category'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+    }
+
     public function getByTeacher(int $teacherId, array $filters = []): Collection
     {
         $query = Course::with(['category', 'modules'])
@@ -178,5 +185,115 @@ class EloquentCourseRepository implements CourseRepositoryInterface
 
         return $searchQuery->orderBy('rating', 'desc')
             ->paginate(15);
+    }
+
+    // ====== MVP EXTENSIONS ======
+
+    public function findWithContent(int $id): ?Course
+    {
+        return Course::with([
+            'teacher',
+            'category',
+            'units' => function ($query) {
+                $query->orderBy('order_index');
+            },
+            'units.modules' => function ($query) {
+                $query->orderBy('order_index');
+            },
+            'units.modules.components' => function ($query) {
+                $query->where('is_active', true)->orderBy('order');
+            }
+        ])->find($id);
+    }
+
+    public function addUnit(int $courseId, array $unitData)
+    {
+        $course = Course::findOrFail($courseId);
+        
+        $unitData['course_id'] = $courseId;
+        
+        $unitId = DB::table('course_units')->insertGetId([
+            'course_id' => $courseId,
+            'title' => $unitData['title'],
+            'description' => $unitData['description'] ?? null,
+            'banner_image' => $unitData['banner_image'] ?? null,
+            'order_index' => $unitData['order_index'] ?? 1,
+            'is_published' => $unitData['is_published'] ?? true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        
+        // Devolver el objeto completo en lugar de solo el ID
+        return DB::table('course_units')->where('id', $unitId)->first();
+    }
+
+    public function addModule(int $unitId, array $moduleData)
+    {
+        // Get the course_id from the unit
+        $unit = DB::table('course_units')->where('id', $unitId)->first();
+        
+        if (!$unit) {
+            throw new \Exception('Unit not found');
+        }
+
+        $moduleId = DB::table('course_modules')->insertGetId([
+            'course_id' => $unit->course_id,
+            'unit_id' => $unitId,
+            'title' => $moduleData['title'],
+            'description' => $moduleData['description'] ?? null,
+            'order_index' => $moduleData['order_index'] ?? 1,
+            'is_published' => $moduleData['is_published'] ?? true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        
+        // Devolver el objeto completo
+        return DB::table('course_modules')->where('id', $moduleId)->first();
+    }
+
+    public function addComponent(int $moduleId, array $componentData)
+    {
+        $componentId = DB::table('module_components')->insertGetId([
+            'module_id' => $moduleId,
+            'type' => $componentData['type'],
+            'title' => $componentData['title'],
+            'content' => $componentData['content'],
+            'file_url' => $componentData['file_url'] ?? null,
+            'metadata' => $componentData['metadata'] ?? null,
+            'duration' => $componentData['duration'] ?? null,
+            'order' => $componentData['order'] ?? 0,
+            'is_mandatory' => $componentData['is_mandatory'] ?? true,
+            'is_active' => $componentData['is_active'] ?? true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        
+        // Devolver el objeto completo
+        return DB::table('module_components')->where('id', $componentId)->first();
+    }
+
+    public function updateWithStructure(int $courseId, array $courseData): Course
+    {
+        return DB::transaction(function () use ($courseId, $courseData) {
+            $course = Course::findOrFail($courseId);
+            
+            // Update basic course info
+            $basicData = array_intersect_key($courseData, [
+                'title' => '',
+                'description' => '',
+                'difficulty_level' => '',
+                'duration_hours' => '',
+                'price' => '',
+                'banner_image' => '',
+                'is_featured' => '',
+                'slug' => ''
+            ]);
+            
+            if (!empty($basicData)) {
+                $course->update($basicData);
+            }
+            
+            return $course->fresh();
+        });
     }
 }

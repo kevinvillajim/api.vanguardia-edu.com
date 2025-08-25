@@ -29,8 +29,8 @@ return new class extends Migration
         // Agregar campos adicionales a module_components para contenido rico
         Schema::table('module_components', function (Blueprint $table) {
             $table->longText('rich_content')->nullable()->after('content'); // HTML/Markdown rico
-            $table->json('metadata')->nullable()->after('rich_content'); // Metadatos específicos del tipo
-            $table->string('thumbnail_url')->nullable()->after('metadata'); // URL de miniatura/preview
+            // metadata ya existe, no la agregamos
+            $table->string('thumbnail_url')->nullable()->after('file_url'); // URL de miniatura/preview
             $table->integer('estimated_duration')->nullable()->after('thumbnail_url'); // Duración estimada en minutos
         });
     }
@@ -43,7 +43,8 @@ return new class extends Migration
         Schema::dropIfExists('course_materials');
         
         Schema::table('module_components', function (Blueprint $table) {
-            $table->dropColumn(['rich_content', 'metadata', 'thumbnail_url', 'estimated_duration']);
+            $table->dropColumn(['rich_content', 'thumbnail_url', 'estimated_duration']);
+            // No eliminamos metadata porque ya existía antes
         });
     }
 };

@@ -65,6 +65,11 @@ class Course extends Model
         return $this->belongsTo(CourseCategory::class, 'category_id');
     }
 
+    public function units(): HasMany
+    {
+        return $this->hasMany(CourseUnit::class)->orderBy('order_index');
+    }
+
     public function modules(): HasMany
     {
         return $this->hasMany(CourseModule::class)->orderBy('order_index');

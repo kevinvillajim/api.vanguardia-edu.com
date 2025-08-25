@@ -20,12 +20,37 @@ class CourseSeeder extends Seeder
     {
         // Crear un usuario profesor si no existe
         $teacher = User::firstOrCreate(
-            ['email' => 'profesor@vanguardia.com'],
+            ['email' => 'profesor@profesor.com'],
             [
                 'name' => 'Profesor Demo',
                 'ci' => '12345678',
-                'password' => Hash::make('password123'),
+                'password' => Hash::make('dalcroze77aA@'),
                 'role' => 3, // Teacher
+                'active' => 1,
+                'password_changed' => 1,
+            ]
+        );
+
+        $user = User::firstOrCreate(
+            ['email' => 'test@test.com'],
+            [
+                'name' => 'user Demo',
+                'ci' => '12345688',
+                'password' => Hash::make('dalcroze77aA@'),
+                'role' => 2, // Student
+                'active' => 1,
+                'password_changed' => 1,
+            ]
+        );
+
+        // Crear un usuario estudiante si no existe
+        $admin = User::firstOrCreate(
+            ['email' => 'admin@admin.com'],
+            [
+                'name' => 'Admin Demo',
+                'ci' => '12345600',
+                'password' => Hash::make('dalcroze77aA@'),
+                'role' => 1, // Admin
                 'active' => 1,
                 'password_changed' => 1,
             ]

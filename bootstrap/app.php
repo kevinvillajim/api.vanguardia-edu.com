@@ -13,9 +13,7 @@ return Application::configure(basePath: dirname(__DIR__))
         channels: __DIR__.'/../routes/channels.php',
         health: '/up',
         then: function () {
-            Route::prefix('api/v2')
-                ->middleware('api')
-                ->group(base_path('routes/api_v2.php'));
+            // No additional routes needed - all in main api.php
         }
     )
     ->withMiddleware(function (Middleware $middleware) {

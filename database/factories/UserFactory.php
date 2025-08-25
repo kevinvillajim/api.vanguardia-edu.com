@@ -28,6 +28,9 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
+            'ci' => fake()->unique()->numerify('##########'), // Generate 10-digit CI
+            'phone' => fake()->phoneNumber(),
+            'bio' => fake()->optional()->sentence(),
             'remember_token' => Str::random(10),
         ];
     }

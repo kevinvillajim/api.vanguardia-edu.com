@@ -14,6 +14,8 @@ interface CourseRepositoryInterface
 
     public function getAllPublished(array $filters = [], int $perPage = 15): LengthAwarePaginator;
 
+    public function getAll(): Collection;
+
     public function getByTeacher(int $teacherId, array $filters = []): Collection;
 
     public function getFeatured(int $limit = 6): Collection;
@@ -37,4 +39,31 @@ interface CourseRepositoryInterface
     public function updateRating(int $id, float $rating): bool;
 
     public function searchCourses(string $query, array $filters = []): LengthAwarePaginator;
+
+    // ====== MVP EXTENSIONS ======
+    
+    /**
+     * Find course by ID with all related content (units, modules, components)
+     */
+    public function findWithContent(int $id): ?Course;
+
+    /**
+     * Add unit to course
+     */
+    public function addUnit(int $courseId, array $unitData);
+
+    /**
+     * Add module to unit
+     */
+    public function addModule(int $unitId, array $moduleData);
+
+    /**
+     * Add component to module
+     */
+    public function addComponent(int $moduleId, array $componentData);
+
+    /**
+     * Update course with complete structure (units, modules, components)
+     */
+    public function updateWithStructure(int $courseId, array $courseData): Course;
 }

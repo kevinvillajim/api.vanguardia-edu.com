@@ -1,15 +1,22 @@
 <?php
 
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\StudentCourseController;
+use App\Http\Controllers\CourseController;
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\TeacherController;
 use App\Http\Controllers\ExpDateController;
+use App\Http\Controllers\FileController;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-// Endpoint de salud (sin autenticación)
+// Health check for API
 Route::get('/health', function () {
     return response()->json([
         'status' => 'OK',
         'message' => 'API is working correctly',
+        'version' => '1.0',
         'timestamp' => now()->toISOString(),
     ]);
 });
@@ -34,161 +41,129 @@ Route::get('/debug/user/{id}', function ($id) {
 
 Route::get('/user', function (Request $request) {
     return $request->user();
-})->middleware('auth:sanctum');
+})->middleware('auth:api');
 
-// Legacy Authentication routes - DEPRECATED
-// Please use /api/v2/auth/* endpoints instead
-Route::group(['prefix' => 'auth'], function ($router) {
-    Route::post('login', function () {
-        return response()->json([
-            'error' => 'This endpoint is deprecated. Please use /api/v2/auth/login',
-            'redirect' => '/api/v2/auth/login',
-        ], 410);
-    });
-    Route::post('register', function () {
-        return response()->json([
-            'error' => 'This endpoint is deprecated. Please use /api/v2/auth/register',
-            'redirect' => '/api/v2/auth/register',
-        ], 410);
+// Authentication routes (public)
+Route::prefix('auth')->group(function () {
+    Route::post('login', [AuthController::class, 'login']);
+    Route::post('register', [AuthController::class, 'register']);
+    
+    // Protected auth routes
+    Route::middleware('auth:api')->group(function () {
+        Route::get('me', [AuthController::class, 'me']);
+        Route::post('logout', [AuthController::class, 'logout']);
+        Route::post('refresh', [AuthController::class, 'refresh']);
+        Route::post('change-password', [AuthController::class, 'changePassword']);
     });
 });
 
-Route::middleware(['auth:api'])->group(function () {
-    Route::post('me', function () {
-        return response()->json([
-            'error' => 'This endpoint is deprecated. Please use /api/v2/auth/me',
-            'redirect' => '/api/v2/auth/me',
-        ], 410);
-    });
-    Route::post('logout', function () {
-        return response()->json([
-            'error' => 'This endpoint is deprecated. Please use /api/v2/auth/logout',
-            'redirect' => '/api/v2/auth/logout',
-        ], 410);
-    });
-    Route::post('refresh', function () {
-        return response()->json([
-            'error' => 'This endpoint is deprecated. Please use /api/v2/auth/refresh',
-            'redirect' => '/api/v2/auth/refresh',
-        ], 410);
-    });
-    Route::post('edit-profile', function () {
-        return response()->json([
-            'error' => 'This endpoint is deprecated. Please use /api/v2/auth/profile',
-            'redirect' => '/api/v2/auth/profile',
-        ], 410);
-    });
-    Route::post('auth/change-password', function () {
-        return response()->json([
-            'error' => 'This endpoint is deprecated. Please use /api/v2/auth/change-password',
-            'redirect' => '/api/v2/auth/change-password',
-        ], 410);
-    });
+// Student routes
+Route::middleware(['auth:api'])->prefix('student')->group(function () {
+    // Student dashboard
+    Route::get('dashboard', [StudentCourseController::class, 'getDashboard']);
+    
+    // Course management for students
+    Route::get('courses', [StudentCourseController::class, 'getCourses']);
+    Route::get('courses/{courseId}', [StudentCourseController::class, 'getCourse']);
+    Route::get('courses/{courseId}/view', [StudentCourseController::class, 'getCourseView']);
+    Route::get('courses/{courseId}/progress', [StudentCourseController::class, 'getProgress']);
+    Route::post('courses/{courseId}/enroll', [StudentCourseController::class, 'enroll']);
+    
+    // Progress tracking
+    Route::post('courses/{courseId}/components/{componentId}/complete', [StudentCourseController::class, 'completeComponent']);
+    Route::get('enrollments', [StudentCourseController::class, 'getEnrollments']);
+    
+    // Quiz functionality
+    Route::post('quizzes/{quizId}/start', [StudentCourseController::class, 'startQuiz']);
+    Route::post('quiz-attempts/{attemptId}/complete', [StudentCourseController::class, 'completeQuiz']);
+    
+    // Certificates
+    Route::post('enrollments/{enrollmentId}/certificate', [StudentCourseController::class, 'generateCertificate']);
 });
 
-// Legacy Progress routes - DEPRECATED - Use V2 Interactive Course API
-Route::get('progress', function () {
-    return response()->json([
-        'error' => 'This endpoint is deprecated. Please use /api/v2/student/courses for progress tracking',
-        'redirect' => '/api/v2/student/courses',
-    ], 410);
-});
-Route::post('progress', function () {
-    return response()->json([
-        'error' => 'This endpoint is deprecated. Please use V2 Interactive Course API',
-        'redirect' => '/api/v2/student/courses',
-    ], 410);
-});
-Route::get('progress/{id}', function () {
-    return response()->json([
-        'error' => 'This endpoint is deprecated. Please use V2 Interactive Course API',
-        'redirect' => '/api/v2/student/courses',
-    ], 410);
-});
-Route::put('progress/{id}', function () {
-    return response()->json([
-        'error' => 'This endpoint is deprecated. Please use V2 Interactive Course API',
-        'redirect' => '/api/v2/student/courses',
-    ], 410);
-});
-Route::get('progress/student/{id}', function () {
-    return response()->json([
-        'error' => 'This endpoint is deprecated. Please use V2 Interactive Course API',
-        'redirect' => '/api/v2/student/courses',
-    ], 410);
-});
-Route::get('progress/{id}/{course}', function () {
-    return response()->json([
-        'error' => 'This endpoint is deprecated. Please use V2 Interactive Course API',
-        'redirect' => '/api/v2/student/courses',
-    ], 410);
-});
-Route::delete('progress/{id}/{course}', function () {
-    return response()->json([
-        'error' => 'This endpoint is deprecated. Please use V2 Interactive Course API',
-        'redirect' => '/api/v2/student/courses',
-    ], 410);
-});
-Route::post('progress/upsert', function () {
-    return response()->json([
-        'error' => 'This endpoint is deprecated. Please use V2 Interactive Course API',
-        'redirect' => '/api/v2/student/courses',
-    ], 410);
-});
-Route::post('progress/update-certificate', function () {
-    return response()->json([
-        'error' => 'This endpoint is deprecated. Please use V2 Interactive Course API',
-        'redirect' => '/api/v2/student/courses',
-    ], 410);
-});
-Route::get('user-progress', function () {
-    return response()->json([
-        'error' => 'This endpoint is deprecated. Please use V2 Interactive Course API',
-        'redirect' => '/api/v2/student/courses',
-    ], 410);
+// Progress tracking routes (available to authenticated users)
+Route::middleware(['auth:api'])->prefix('progress')->group(function () {
+    // Get progress for a specific course/unit
+    Route::get('{courseId}/{unitId}', [StudentCourseController::class, 'getUnitProgress']);
+    
+    // Update/insert progress
+    Route::post('upsert', [StudentCourseController::class, 'upsertProgress']);
 });
 
-// Legacy User Management routes - DEPRECATED
-// Please use /api/v2/users/* endpoints instead
-Route::middleware(['auth:api', 'role:1'])->group(function () {
-    Route::get('users', function () {
-        return response()->json([
-            'error' => 'This endpoint is deprecated. Please use /api/v2/users',
-            'redirect' => '/api/v2/users',
-        ], 410);
-    });
-    Route::post('import-users', function () {
-        return response()->json([
-            'error' => 'This endpoint is deprecated. Please use /api/v2/users/import',
-            'redirect' => '/api/v2/users/import',
-        ], 410);
-    });
-    Route::put('users/{id}/reset-password', function () {
-        return response()->json([
-            'error' => 'This endpoint is deprecated. Please use /api/v2/users/{id}/reset-password',
-            'redirect' => '/api/v2/users/{id}/reset-password',
-        ], 410);
-    });
-    Route::post('users', function () {
-        return response()->json([
-            'error' => 'This endpoint is deprecated. Please use /api/v2/users',
-            'redirect' => '/api/v2/users',
-        ], 410);
-    });
-    Route::put('users/{id}', function () {
-        return response()->json([
-            'error' => 'This endpoint is deprecated. Please use /api/v2/users/{id}',
-            'redirect' => '/api/v2/users/{id}',
-        ], 410);
-    });
-    Route::delete('users/{id}', function () {
-        return response()->json([
-            'error' => 'This endpoint is deprecated. Please use /api/v2/users/{id}',
-            'redirect' => '/api/v2/users/{id}',
-        ], 410);
-    });
+// Teacher routes
+Route::middleware(['auth:api', 'role:3'])->prefix('teacher')->group(function () {
+    // Teacher dashboard and stats
+    Route::get('stats', [TeacherController::class, 'getStats']);
+    Route::get('activity', [TeacherController::class, 'getRecentActivity']);
+    Route::get('dashboard', [TeacherController::class, 'getDashboard']);
+    Route::get('students', [TeacherController::class, 'getStudents']);
+    
+    // Course management
+    Route::get('courses', [CourseController::class, 'myCourses']);
+    Route::post('courses', [CourseController::class, 'store']);
+    Route::get('courses/{courseId}', [CourseController::class, 'show']);
+    Route::put('courses/{courseId}', [CourseController::class, 'update']);
+    Route::delete('courses/{courseId}', [CourseController::class, 'destroy']);
+    Route::get('courses/{courseId}/enrollments', [TeacherController::class, 'getCourseEnrollments']);
+    
+    // MVP Course building endpoints
+    Route::post('courses/{courseId}/units', [CourseController::class, 'addUnit']);
+    Route::delete('units/{unitId}', [CourseController::class, 'deleteUnit']);
+    Route::post('units/{unitId}/modules', [CourseController::class, 'addModule']);
+    Route::delete('modules/{moduleId}', [CourseController::class, 'deleteModule']);
+    Route::post('modules/{moduleId}/components', [CourseController::class, 'addComponent']);
+    Route::put('components/{componentId}', [CourseController::class, 'updateComponent']);
+    Route::delete('components/{componentId}', [CourseController::class, 'deleteComponent']);
+    Route::put('courses/{courseId}/publish', [CourseController::class, 'publishCourse']);
+    Route::post('courses/{courseId}/upload-banner', [CourseController::class, 'uploadBanner']);
+    
+    // TODO: Implementar estos métodos en CourseController
+    // Route::post('courses/{courseId}/clone', [CourseController::class, 'cloneCourse']);
+    // Route::get('courses/{courseId}/students', [CourseController::class, 'getCourseStudents']);
+    // Route::get('courses/{courseId}/analytics', [CourseController::class, 'getCourseAnalytics']);
 });
 
+// File upload routes (authenticated users)
+Route::middleware(['auth:api'])->prefix('files')->group(function () {
+    Route::post('upload', [FileController::class, 'uploadFile']);
+    Route::delete('{filename}', [FileController::class, 'deleteFile']);
+});
+
+// Admin routes
+Route::middleware(['auth:api', 'role:1'])->prefix('admin')->group(function () {
+    // User management
+    Route::get('users', [AdminController::class, 'getUsers']);
+    Route::post('users', [AdminController::class, 'createUser']);
+    Route::get('users/{userId}', [AdminController::class, 'getUser']);
+    Route::put('users/{userId}', [AdminController::class, 'updateUser']);
+    Route::delete('users/{userId}', [AdminController::class, 'deleteUser']);
+    Route::post('users/import', [AdminController::class, 'importUsers']);
+    Route::put('users/{userId}/reset-password', [AdminController::class, 'resetUserPassword']);
+    
+    // Course management
+    Route::get('courses', [AdminController::class, 'getAllCourses']);
+    Route::get('dashboard', [AdminController::class, 'getDashboard']);
+    
+    // Reports and analytics
+    Route::get('reports/users', [AdminController::class, 'getUserReport']);
+    Route::get('reports/courses', [AdminController::class, 'getCourseReport']);
+    Route::get('system/health', [AdminController::class, 'getSystemHealth']);
+    
+    // System settings
+    Route::get('system-settings', [AdminController::class, 'getSystemSettings']);
+    Route::put('system-settings', [AdminController::class, 'updateSystemSettings']);
+});
+
+// Public course routes (for course catalog)
+Route::prefix('courses')->group(function () {
+    Route::get('/', [CourseController::class, 'index']);
+    Route::get('/slug/{slug}', [CourseController::class, 'getBySlug']);
+    Route::get('/{courseId}', [CourseController::class, 'show']);
+    Route::get('/{courseId}/content', [CourseController::class, 'getCourseContent']);
+    Route::get('/category/{categoryId}', [CourseController::class, 'getCoursesByCategory']);
+});
+
+// Legacy routes for existing functionality
 Route::middleware(['auth:api'])->group(function () {
     Route::get('expdates', [ExpDateController::class, 'index']);
     Route::get('expdates/{id}', [ExpDateController::class, 'show']);
@@ -196,48 +171,11 @@ Route::middleware(['auth:api'])->group(function () {
     Route::post('expdates', [ExpDateController::class, 'store']);
 });
 
-// RUTAS DE CURSOS - Legacy (redirigir a V2)
-Route::prefix('courses')->group(function () {
-    // Rutas públicas - básicas para el frontend legacy
-    Route::get('/', function () {
-        return response()->json([
-            'success' => true,
-            'message' => 'Courses API - Please use /api/v2/courses for full functionality',
-            'data' => [],
-        ]);
-    });
-
-    // Redirigir rutas autenticadas
-    Route::middleware(['auth:api'])->group(function () {
-        // Rutas para estudiantes (rol 2)
-        Route::get('/student/my-courses', function () {
-            return redirect('/api/v2/student/courses');
-        });
-
-        // Rutas para profesores (rol 3)
-        Route::get('/teacher/my-courses', function () {
-            return redirect('/api/v2/teacher/courses');
-        });
-
-        // Rutas generales para todos los roles autenticados
-        Route::get('/my-courses', function () {
-            $user = auth('api')->user();
-
-            if (! $user) {
-                return response()->json(['error' => 'Unauthorized'], 401);
-            }
-
-            // Redirigir basado en el rol
-            switch ($user->role) {
-                case 1: // Admin
-                    return redirect('/api/v2/admin/courses');
-                case 2: // Estudiante
-                    return redirect('/api/v2/student/courses');
-                case 3: // Profesor
-                    return redirect('/api/v2/teacher/courses');
-                default:
-                    return response()->json(['error' => 'Invalid user role'], 403);
-            }
-        });
-    });
+// Fallback for unimplemented routes
+Route::fallback(function () {
+    return response()->json([
+        'success' => false,
+        'error' => 'API endpoint not found',
+        'message' => 'The requested API endpoint is not available'
+    ], 404);
 });
