@@ -19,8 +19,14 @@ class StorageHelper
         // Remove leading slash if present
         $cleanPath = ltrim($path, '/');
         
+        // If it's already a full storage URL path (with /storage/), clean it and use Storage::url
+        if (str_starts_with($path, '/storage/')) {
+            $relativePath = str_replace('/storage/', '', $path);
+            return Storage::url($relativePath);
+        }
+        
         // If path already includes the storage structure, use as is
-        if (str_starts_with($cleanPath, 'courses/')) {
+        if (str_starts_with($cleanPath, 'courses/') || str_starts_with($cleanPath, 'uploads/')) {
             return Storage::url($cleanPath);
         }
         

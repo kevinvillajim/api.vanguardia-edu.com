@@ -7,6 +7,7 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\TeacherController;
 use App\Http\Controllers\ExpDateController;
 use App\Http\Controllers\FileController;
+use App\Http\Controllers\CategoryController;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -114,8 +115,16 @@ Route::middleware(['auth:api', 'role:3'])->prefix('teacher')->group(function () 
     Route::post('modules/{moduleId}/components', [CourseController::class, 'addComponent']);
     Route::put('components/{componentId}', [CourseController::class, 'updateComponent']);
     Route::delete('components/{componentId}', [CourseController::class, 'deleteComponent']);
-    Route::put('courses/{courseId}/publish', [CourseController::class, 'publishCourse']);
+    Route::put('courses/{courseId}/publish', [CourseController::class, 'publish']);
     Route::post('courses/{courseId}/upload-banner', [CourseController::class, 'uploadBanner']);
+    
+    // Draft management routes
+    Route::post('courses/{courseId}/draft', [CourseController::class, 'saveDraft']);
+    Route::get('courses/{courseId}/draft', [CourseController::class, 'getLatestDraft']);
+    Route::delete('courses/{courseId}/drafts/cleanup', [CourseController::class, 'cleanupDrafts']);
+    
+    // Category management for teachers (context of course creation)
+    Route::post('categories', [CategoryController::class, 'storeForTeacher']);
     
     // TODO: Implementar estos métodos en CourseController
     // Route::post('courses/{courseId}/clone', [CourseController::class, 'cloneCourse']);
@@ -144,6 +153,11 @@ Route::middleware(['auth:api', 'role:1'])->prefix('admin')->group(function () {
     Route::get('courses', [AdminController::class, 'getAllCourses']);
     Route::get('dashboard', [AdminController::class, 'getDashboard']);
     
+    // Category management
+    Route::post('categories', [CategoryController::class, 'store']);
+    Route::put('categories/{id}', [CategoryController::class, 'update']);
+    Route::delete('categories/{id}', [CategoryController::class, 'destroy']);
+    
     // Reports and analytics
     Route::get('reports/users', [AdminController::class, 'getUserReport']);
     Route::get('reports/courses', [AdminController::class, 'getCourseReport']);
@@ -161,6 +175,12 @@ Route::prefix('courses')->group(function () {
     Route::get('/{courseId}', [CourseController::class, 'show']);
     Route::get('/{courseId}/content', [CourseController::class, 'getCourseContent']);
     Route::get('/category/{categoryId}', [CourseController::class, 'getCoursesByCategory']);
+});
+
+// Public category routes
+Route::prefix('categories')->group(function () {
+    Route::get('/', [CategoryController::class, 'index']);
+    Route::get('/{id}', [CategoryController::class, 'show']);
 });
 
 // Legacy routes for existing functionality

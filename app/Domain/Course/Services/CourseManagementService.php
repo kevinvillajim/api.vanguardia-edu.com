@@ -186,7 +186,7 @@ class CourseManagementService
         // Store file
         $path = $file->storeAs("courses/curso{$courseId}", $filename, 'public');
         
-        return StorageHelper::courseAssetUrl($filename, $courseId);
+        return $path; // Return the relative path, not the full URL
     }
 
     /**

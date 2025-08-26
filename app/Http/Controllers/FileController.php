@@ -47,8 +47,8 @@ class FileController extends Controller
             // Store file
             $path = $file->storeAs($storagePath, $filename, 'public');
             
-            // Generate public URL (relative)
-            $url = Storage::url($path);
+            // Return relative path, not full URL (Resources will handle URL generation)
+            $url = $path;
             
             // Get file metadata
             $metadata = $this->getFileMetadata($file, $originalName);

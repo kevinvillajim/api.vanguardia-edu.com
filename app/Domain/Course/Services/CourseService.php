@@ -25,10 +25,11 @@ class CourseService
     public function createCourse(array $data, int $teacherId): Course
     {
         return DB::transaction(function () use ($data, $teacherId) {
-            // Procesar imagen del banner si existe
-            if (isset($data['banner_image'])) {
+            // Procesar imagen del banner si existe y es un archivo
+            if (isset($data['banner_image']) && $data['banner_image'] instanceof \Illuminate\Http\UploadedFile) {
                 $data['banner_image'] = $this->uploadBannerImage($data['banner_image']);
             }
+            // Si banner_image es string, se mantiene como está (ya es un path)
 
             // Agregar teacher_id
             $data['teacher_id'] = $teacherId;
@@ -54,14 +55,15 @@ class CourseService
                 throw new Exception('Curso no encontrado');
             }
 
-            // Procesar imagen del banner si existe
-            if (isset($data['banner_image'])) {
+            // Procesar imagen del banner si existe y es un archivo
+            if (isset($data['banner_image']) && $data['banner_image'] instanceof \Illuminate\Http\UploadedFile) {
                 // Eliminar imagen anterior si existe
                 if ($course->banner_image) {
                     Storage::delete($course->banner_image);
                 }
                 $data['banner_image'] = $this->uploadBannerImage($data['banner_image']);
             }
+            // Si banner_image es string, se mantiene como está (ya es un path)
 
             // Actualizar el curso
             return $this->courseRepository->update($courseId, $data);
@@ -199,12 +201,12 @@ class CourseService
             throw new Exception('El curso debe tener al menos un módulo');
         }
 
-        $hasLessons = $course->modules->some(function ($module) {
-            return $module->lessons->isNotEmpty();
+        $hasContent = $course->modules->some(function ($module) {
+            return $module->lessons->isNotEmpty() || $module->components->isNotEmpty();
         });
 
-        if (! $hasLessons) {
-            throw new Exception('El curso debe tener al menos una lección');
+        if (! $hasContent) {
+            throw new Exception('El curso debe tener al menos una lección o componente');
         }
 
         return $this->courseRepository->publish($courseId);

@@ -17,6 +17,9 @@ class Course extends Model
         'title',
         'slug',
         'description',
+        'short_description',
+        'learning_objectives',
+        'prerequisites',
         'banner_image',
         'teacher_id',
         'category_id',
@@ -36,6 +39,8 @@ class Course extends Model
         'rating' => 'decimal:2',
         'duration_hours' => 'integer',
         'enrollment_count' => 'integer',
+        'learning_objectives' => 'array',
+        'prerequisites' => 'array',
     ];
 
     protected static function boot()

@@ -12,8 +12,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Para MySQL, necesitamos usar una consulta directa para modificar el enum
-        DB::statement("ALTER TABLE module_components MODIFY COLUMN type ENUM('banner', 'video', 'reading', 'image', 'document', 'audio', 'interactive', 'quiz') NOT NULL");
+        // SQLite doesn't support MODIFY COLUMN, so we skip this for SQLite
+        if (config('database.default') !== 'sqlite') {
+            DB::statement("ALTER TABLE module_components MODIFY COLUMN type ENUM('banner', 'video', 'reading', 'image', 'document', 'audio', 'interactive', 'quiz') NOT NULL");
+        }
+        // For SQLite, the column is already text and can accept 'quiz' values
     }
 
     /**
@@ -21,7 +24,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // Revertir el enum al estado anterior (sin quiz)
-        DB::statement("ALTER TABLE module_components MODIFY COLUMN type ENUM('banner', 'video', 'reading', 'image', 'document', 'audio', 'interactive') NOT NULL");
+        // SQLite doesn't support MODIFY COLUMN, so we skip this for SQLite
+        if (config('database.default') !== 'sqlite') {
+            DB::statement("ALTER TABLE module_components MODIFY COLUMN type ENUM('banner', 'video', 'reading', 'image', 'document', 'audio', 'interactive') NOT NULL");
+        }
     }
 };

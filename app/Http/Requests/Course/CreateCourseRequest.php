@@ -16,11 +16,16 @@ class CreateCourseRequest extends FormRequest
         return [
             'title' => 'required|string|max:255',
             'description' => 'required|string',
+            'short_description' => 'nullable|string|max:500',
+            'learning_objectives' => 'nullable|array',
+            'learning_objectives.*' => 'string|max:255',
+            'prerequisites' => 'nullable|array',
+            'prerequisites.*' => 'string|max:255',
             'category_id' => 'nullable|exists:course_categories,id',
             'difficulty_level' => 'required|in:beginner,intermediate,advanced',
             'duration_hours' => 'nullable|integer|min:0',
             'price' => 'nullable|numeric|min:0',
-            'banner_image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
+            'banner_image' => 'nullable|string|max:2048', // Aceptar URL de imagen ya subida
             'is_featured' => 'nullable|boolean',
 
             // Módulos opcionales al crear
@@ -48,8 +53,8 @@ class CreateCourseRequest extends FormRequest
             'description.required' => 'La descripción del curso es obligatoria',
             'difficulty_level.required' => 'El nivel de dificultad es obligatorio',
             'difficulty_level.in' => 'El nivel de dificultad debe ser: beginner, intermediate o advanced',
-            'banner_image.image' => 'El archivo debe ser una imagen',
-            'banner_image.max' => 'La imagen no debe superar los 5MB',
+            'banner_image.string' => 'La imagen del banner debe ser una URL válida',
+            'banner_image.max' => 'La URL de la imagen no debe superar los 2048 caracteres',
             'category_id.exists' => 'La categoría seleccionada no existe',
         ];
     }

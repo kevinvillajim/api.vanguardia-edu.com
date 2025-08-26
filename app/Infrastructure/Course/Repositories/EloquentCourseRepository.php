@@ -12,8 +12,14 @@ class EloquentCourseRepository implements CourseRepositoryInterface
 {
     public function findById(int $id): ?Course
     {
-        return Course::with(['teacher', 'category', 'modules.lessons'])
-            ->find($id);
+        return Course::with([
+            'teacher', 
+            'category', 
+            'units.modules.components',
+            'units.modules.lessons',
+            'modules.lessons', // Compatibilidad
+            'modules.components' // Compatibilidad
+        ])->find($id);
     }
 
     public function findBySlug(string $slug): ?Course

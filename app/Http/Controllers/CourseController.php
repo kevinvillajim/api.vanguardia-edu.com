@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Course\Models\Course;
 use App\Domain\Course\Repositories\CourseRepositoryInterface;
 use App\Domain\Course\Services\CourseService;
 use App\Domain\Course\Services\CourseManagementService;
@@ -13,6 +14,7 @@ use App\Http\Requests\Course\UpdateCourseRequest;
 use App\Http\Resources\Course\CourseDetailResource;
 use App\Http\Resources\Course\CourseResource;
 use App\Http\Resources\Course\EnrollmentResource;
+use App\Models\CourseDraft;
 use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -64,9 +66,25 @@ class CourseController extends Controller
     /**
      * Detalle de un curso
      */
-    public function show(string $slug): JsonResponse
+    public function show(int $courseId): JsonResponse
     {
-        $course = $this->courseRepository->findBySlug($slug);
+        // Para teacher, cargar TODAS las relaciones necesarias
+        $course = Course::with([
+            'teacher',
+            'category',
+            'units' => function($query) {
+                $query->orderBy('order_index');
+            },
+            'units.modules' => function($query) {
+                $query->orderBy('order_index');
+            },
+            'units.modules.components' => function($query) {
+                $query->where('is_active', true)->orderBy('order');
+            },
+            'units.modules.lessons' => function($query) {
+                $query->orderBy('order_index');
+            }
+        ])->find($courseId);
 
         if (! $course) {
             return response()->json([
@@ -74,11 +92,36 @@ class CourseController extends Controller
                 'message' => 'Curso no encontrado',
             ], 404);
         }
+        
+        // Debug: Log para verificar que se cargan las relaciones
+        \Log::info('CourseController::show - Curso cargado con estructura completa:', [
+            'id' => $course->id,
+            'title' => $course->title,
+            'units_count' => $course->units->count(),
+            'total_modules' => $course->units->sum(function($unit) {
+                return $unit->modules->count();
+            }),
+            'total_components' => $course->units->sum(function($unit) {
+                return $unit->modules->sum(function($module) {
+                    return $module->components->count();
+                });
+            })
+        ]);
 
         // Verificar si el usuario está inscrito
         $isEnrolled = false;
         if (Auth::check()) {
             $isEnrolled = $course->isEnrolledBy(Auth::id());
+            
+            // Si es el profesor del curso, incluir toda la información
+            if ($course->teacher_id === Auth::id()) {
+                return response()->json([
+                    'success' => true,
+                    'data' => new CourseDetailResource($course),
+                    'is_enrolled' => true,
+                    'is_teacher' => true
+                ]);
+            }
         }
 
         return response()->json([
@@ -781,27 +824,6 @@ class CourseController extends Controller
         }
     }
 
-    /**
-     * Publish course
-     */
-    public function publishCourse(int $courseId): JsonResponse
-    {
-        try {
-            $user = Auth::user();
-            $course = $this->courseManagementService->publishCourse($courseId, $user->id);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Course published successfully',
-                'data' => new CourseDetailResource($course)
-            ]);
-        } catch (Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 400);
-        }
-    }
 
     /**
      * Upload banner image for course
@@ -990,6 +1012,125 @@ class CourseController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+    /**
+     * Guardar borrador del curso
+     * POST /api/teacher/courses/{id}/draft
+     */
+    public function saveDraft(Request $request, int $courseId): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            
+            // Verificar que el usuario es el propietario del curso
+            $course = $this->courseRepository->findById($courseId);
+            if (!$course || $course->teacher_id !== $user->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Curso no encontrado o no autorizado'
+                ], 404);
+            }
+
+            $validated = $request->validate([
+                'draft_data' => 'required|array',
+                'draft_type' => 'required|in:auto,manual'
+            ]);
+
+            // Limpiar drafts antiguos (mantener solo los 2 más recientes)
+            CourseDraft::cleanupOldDrafts($courseId, $user->id, 2);
+            
+            // Crear nuevo draft
+            $draft = CourseDraft::create([
+                'course_id' => $courseId,
+                'user_id' => $user->id,
+                'draft_data' => $validated['draft_data'],
+                'draft_type' => $validated['draft_type']
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Borrador guardado exitosamente',
+                'data' => [
+                    'draft_id' => $draft->id,
+                    'saved_at' => $draft->created_at
+                ]
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error guardando borrador: ' . $e->getMessage()
+            ], 400);
+        }
+    }
+
+    /**
+     * Obtener último borrador del curso
+     * GET /api/teacher/courses/{id}/draft
+     */
+    public function getLatestDraft(int $courseId): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            
+            // Verificar que el usuario es el propietario del curso
+            $course = $this->courseRepository->findById($courseId);
+            if (!$course || $course->teacher_id !== $user->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Curso no encontrado o no autorizado'
+                ], 404);
+            }
+
+            $draft = CourseDraft::getLatest($courseId, $user->id);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'draft' => $draft ? $draft->draft_data : null,
+                    'draft_type' => $draft ? $draft->draft_type : null,
+                    'saved_at' => $draft ? $draft->created_at : null
+                ]
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error obteniendo borrador: ' . $e->getMessage()
+            ], 400);
+        }
+    }
+
+    /**
+     * Limpiar borradores antiguos de un curso
+     * DELETE /api/teacher/courses/{id}/drafts/cleanup
+     */
+    public function cleanupDrafts(int $courseId): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            
+            // Verificar que el usuario es el propietario del curso
+            $course = $this->courseRepository->findById($courseId);
+            if (!$course || $course->teacher_id !== $user->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Curso no encontrado o no autorizado'
+                ], 404);
+            }
+
+            // Eliminar todos los drafts excepto el más reciente
+            CourseDraft::cleanupOldDrafts($courseId, $user->id, 1);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Borradores limpiados exitosamente'
+            ]);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error limpiando borradores: ' . $e->getMessage()
             ], 400);
         }
     }
